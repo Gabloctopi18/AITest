@@ -7,7 +7,6 @@
 #include <fstream>
 #include <cstdint>
 
-
 using namespace std;
 
 #define inputSize 284
@@ -53,7 +52,7 @@ vector<double> imageToVector(const string& imagePath, int size){
         unsigned char pixel_value;
         file.read(reinterpret_cast<char*>(&pixel_value), sizeof(pixel_value));
         
-        // Normalize the pixel value from [0, 255] to [0.0, 1.0]
+        // normalize pixel values from [0, 255] to [0.0, 1.0]
         normValues[i] = static_cast<double>(pixel_value) / 255.0;
     }
 
@@ -62,24 +61,48 @@ vector<double> imageToVector(const string& imagePath, int size){
 
 }
 
+double sigmoid(double x){ return 1.0 / (1.0 + exp(-x)); }
+
+vector<double> identify(const string& imagePath, array<array<float, inputSize>, layer2size> weights12, array<array<float, layer2size>, layer3size> weights23, array<array<float, layer3size>, outputSize> weights34){
+    vector<double> layer2(layer2size, 0);
+    vector<double> layer3(layer3size, 0);
+    vector<double> output(outputSize, 0);
+    vector<double> input = imageToVector(imagePath, inputSize);
+
+    // all of the matrix multiplication
+    for (int i = 0; i < weights12.size(); ++i){
+        for (int j = 0; j < input.size(); ++j){
+            layer2[i] += (weights12[i][j] * input[j]); 
+        }
+    }
+
+    for (int i = 0; i < layer3size; ++i){
+        for (int j = 0; j < layer2size; ++j){
+            layer3[i] += (weights23[i][j] * layer2[j]); 
+        }
+    }
+
+    for (int i = 0; i < outputSize; ++i){
+        for (int j = 0; j < layer3size; ++j){
+            output[i] += (weights34[i][j] * layer3[j]); 
+        }
+        output[i] = sigmoid(output[i]);
+    }
+
+    return output;
+
+}
+
 int main(int argc, char *argv[]){
 
-    vector<float> input;
-    vector<float> layer2;
-    vector<float> layer3; 
-    vector<float> output;
+    vector<double> input;
+    vector<double> layer2;
+    vector<double> layer3; 
+    vector<double> output;
 
     array<array<float, inputSize>, layer2size> weights12; // there are (layer2size) rows of (inputSize) weights so you can matrix multiply
     array<array<float, layer2size>, layer3size> weights23; // same for these
     array<array<float, layer3size>, outputSize> weights34;
-
-    ifstream image(argv[argc - 1]);
-    if (!image){ 
-        cout << "unable to open file" << endl;
-        return 1;
-    }
-
-    
 
     return 0;
 }
