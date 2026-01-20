@@ -9,7 +9,7 @@
 
 using namespace std;
 
-#define inputSize 284
+#define inputSize 784 //maybe some geometric progression going on
 #define layer2size 183
 #define layer3size 43
 #define outputSize 10
@@ -21,7 +21,7 @@ uint32_t reverse_bytes(uint32_t bytes) {
 vector<double> imageToVector(const string& imagePath, int size){
     // dumbass big endian shit
 
-    ifstream file(imagePath, std::ios::binary);
+    ifstream file(imagePath, ios::binary);
     vector<double> normValues;
 
     if (!file.is_open()) {
@@ -63,7 +63,15 @@ vector<double> imageToVector(const string& imagePath, int size){
 
 double sigmoid(double x){ return 1.0 / (1.0 + exp(-x)); }
 
-vector<double> identify(const string& imagePath, array<array<float, inputSize>, layer2size> weights12, array<array<float, layer2size>, layer3size> weights23, array<array<float, layer3size>, outputSize> weights34){
+vector<double> identify(const string& imagePath, 
+    array<array<float, inputSize>, layer2size> weights12, 
+    array<array<float, layer2size>, layer3size> weights23, 
+    array<array<float, layer3size>, outputSize> weights34, 
+    vector<double> biases2, 
+    vector<double> biases3, 
+    vector<double> biases4)
+{
+
     vector<double> layer2(layer2size, 0);
     vector<double> layer3(layer3size, 0);
     vector<double> output(outputSize, 0);
@@ -74,31 +82,34 @@ vector<double> identify(const string& imagePath, array<array<float, inputSize>, 
         for (int j = 0; j < input.size(); ++j){
             layer2[i] += (weights12[i][j] * input[j]); 
         }
+        layer2[i] += biases2[i];
     }
 
     for (int i = 0; i < layer3size; ++i){
         for (int j = 0; j < layer2size; ++j){
             layer3[i] += (weights23[i][j] * layer2[j]); 
         }
+        layer3[i] += biases3[i];
     }
 
     for (int i = 0; i < outputSize; ++i){
         for (int j = 0; j < layer3size; ++j){
             output[i] += (weights34[i][j] * layer3[j]); 
         }
-        output[i] = sigmoid(output[i]);
+        output[i] = sigmoid(output[i] + biases4[i]);
     }
 
     return output;
 
 }
 
+/*
 int main(int argc, char *argv[]){
 
     vector<double> input;
-    vector<double> layer2;
-    vector<double> layer3; 
-    vector<double> output;
+    vector<double> baises2;
+    vector<double> biases3;
+    vector<double> biases4;
 
     array<array<float, inputSize>, layer2size> weights12; // there are (layer2size) rows of (inputSize) weights so you can matrix multiply
     array<array<float, layer2size>, layer3size> weights23; // same for these
@@ -106,3 +117,4 @@ int main(int argc, char *argv[]){
 
     return 0;
 }
+*/
