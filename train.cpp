@@ -71,6 +71,24 @@ class Network {
             }
         }
 
+        void fillWeights(double x){
+            for (auto& e1 : w12){
+                for (auto& e2 : e1){
+                    e2 = x;
+                } 
+            }
+            for (auto& e1 : w23){
+                for (auto& e2 : e1){
+                    e2 = x;
+                } 
+            }
+            for (auto& e1 : w34){
+                for (auto& e2 : e1){
+                    e2 = x;
+                } 
+            }
+        }
+
         vector<double> identify(const string& imagePath){
             reset();
             input = imageToVector(imagePath, inputSize);
@@ -104,14 +122,17 @@ class Network {
             for (int i = 0; i < identification.size(); ++i){
                 cost += pow((identification[i] - target[i]), 2);
             }
-            return sqrt(cost);
+            return cost;
         }
 
-        
+        void backpropogate(double cost, double stepsize){
+
+        }
 };
 
 int main(int argc, char *argv[]){
     /*
+    // OLD - NOT USED ANYMORE
     // random stuff
     unsigned seed = chrono::system_clock::now().time_since_epoch().count();
     mt19937 gen(seed);
@@ -158,16 +179,30 @@ int main(int argc, char *argv[]){
     vector<double> target(outputSize, 0.0);
     vector<double> identification;
 
+    double rate = 0.02;
+    Network change;
+    change.fillWeights(0.0);
+    double z = 0.0;
+
     while (getline(map, line)){
         path = line.substr(0, line.find(','));
         fill(target.begin(), target.end(), 0);
-        target[stoi(line.substr(line.find(','))) - 1] = 1.0;
+        target[stoi(line.substr(line.find(',')))] = 1.0;
 
         identification = network.identify(path);
-        cost = network.cost(identification, target);
 
+        for (int j = 0; j < size(change.w34); ++j){
+            for (int k = 0; k < size(change.w34[j]); ++k){
+                z += (network.w34[j][k] * network.layer3[k]) + network.b4[k];
+            }
+            for (int k = 0; k < size(change.w34[j]); ++k){
+                change.w34[j][k] += -1 * rate * network.layer3[k] * sigmoidPrime(z) * 2 * (identification[j] - target[j]);
+                change.layer2[k] += -1 * rate * network.w34[j][k] * sigmoidPrime(z) * 2 * (identification[j] - target[j]);
+            }
+            change.b4[j] += -1 * rate * sigmoidPrime(z) * 2 * (identification[j] - target[j]);
+            z = 0.0;
+        }
     }
     
-
     return 0;
 }

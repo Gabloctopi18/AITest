@@ -65,6 +65,8 @@ vector<double> imageToVector(const string& imagePath, int size){
 
 double sigmoid(double x){ return 1.0 / (1.0 + exp(-x)); }
 
+double sigmoidPrime(double x){ return sigmoid(x) * (1 - sigmoid(x)); }
+
 
 /*
 vector<double> identify(const string& imagePath, 
