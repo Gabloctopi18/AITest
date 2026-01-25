@@ -9,10 +9,12 @@
 #include <cstdint>
 #include <random>
 #include <chrono>
+#include <Eigen/Dense>
 
 #include "helpers.h"
 
 using namespace std;
+namespace e = Eigen;
 
 #define inputSize 784 //maybe some geometric progression going on
 #define layer2size 183
@@ -23,106 +25,49 @@ using namespace std;
 class Network {
 
     public:
-        vector<double> input;
-        vector<double> l2;
-        vector<double> l3;
-        vector<double> output;
-        vector<double> b2;
-        vector<double> b3;
-        vector<double> b4;
-        array<array<float, inputSize>, layer2size> w12; // there are (layer2size) rows of (inputSize) weights so you can matrix multiply
-        array<array<float, layer2size>, layer3size> w23; // same for these
-        array<array<float, layer3size>, outputSize> w34;
+        vector<int> shape;
+        int layercount = shape.size();
+        vector<e::VectorXd> l;
+        vector<e::VectorXd> b;
+        vector<e::MatrixXd> w;
+        vector<e::VectorXd> z;
 
-        Network():
-            l2(layer2size), 
-            l3(layer3size), 
-            b2(layer2size), 
-            b3(layer3size), 
-            b4(outputSize)
-        {}
+        Network(vector<int> sizes):
+            l(layercount), 
+            b(layercount - 1), 
+            w(layercount - 1), 
+            z(layercount - 1)
+        {
+            shape = sizes;
+            l[0] = e::VectorXd::Constant(shape[0], 0);
+            for (int i = 0; i < layercount-1; ++i){
+                w[i] = e::MatrixXd::Random(shape[i], shape[i+1]) * 0.5;
+                b[i] = e::VectorXd::Constant(shape[i+1], 0.1);
+                z[i] = e::VectorXd::Constant(shape[i+1], 0);
+                l[i+1] = e::VectorXd::Constant(shape[i+1]);
+            }
+        }
 
         void reset(){
-            fill(input.begin(), input.end(), 0);
-            fill(l2.begin(), l2.end(), 0);
-            fill(l3.begin(), l3.end(), 0);
-            fill(output.begin(), output.end(), 0);
-        }
-
-        void randomize(){
-            unsigned seed = chrono::system_clock::now().time_since_epoch().count();
-            mt19937 gen(seed);
-            uniform_int_distribution<int> distrib(-0.5, 0.5);
-
-            for (auto& e1 : w12){
-                for (auto& e2 : e1){
-                    e2 = distrib(gen);
-                }
-            }
-            for (auto& e1 : w23){
-                for (auto& e2 : e1){
-                    e2 = distrib(gen);
-                }
-            }
-            for (auto& e1 : w34){
-                for (auto& e2 : e1){
-                    e2 = distrib(gen);
-                }
+            for (int i = 0; i < layercount; ++i){
+                l[i].setZero();
             }
         }
 
-        void fillWeights(double x){
-            for (auto& e1 : w12){
-                for (auto& e2 : e1){
-                    e2 = x;
-                } 
-            }
-            for (auto& e1 : w23){
-                for (auto& e2 : e1){
-                    e2 = x;
-                } 
-            }
-            for (auto& e1 : w34){
-                for (auto& e2 : e1){
-                    e2 = x;
-                } 
-            }
-        }
-
-        vector<double> identify(const string& imagePath){
+        e::VectorXd identify(const string& imagePath){
             reset();
-            input = imageToVector(imagePath, inputSize);
+            l[0] = imageToVector(imagePath, shape[0]);
 
-            // all of the matrix multiplication
-            for (int i = 0; i < w12.size(); ++i){
-                for (int j = 0; j < input.size(); ++j){
-                    l2[i] += (w12[i][j] * input[j]); 
-                }
-                l2[i] += b2[i];
-            }
-            for (int i = 0; i < layer3size; ++i){
-                for (int j = 0; j < layer2size; ++j){
-                    l3[i] += (w23[i][j] * l2[j]); 
-                }
-                l3[i] += b3[i];
+            for (int i = 0; i < layercount-1; ++i){
+                z[i] = (w[i] * l[i]) + b[i];
+                l[i+1] = 1.0 / (1.0 + (-z[i]).array().exp());
             }
 
-            for (int i = 0; i < outputSize; ++i){
-                for (int j = 0; j < layer3size; ++j){
-                    output[i] += (w34[i][j] * l3[j]); 
-                }
-                output[i] = sigmoid(output[i] + b4[i]);
-            }
-
-            return output;
+            return l[layercount-2];
         }
 
-        double cost(vector<double> identification, vector<double> target){
-            double cost = 0;
-            for (int i = 0; i < identification.size(); ++i){
-                cost += pow((identification[i] - target[i]), 2);
-            }
-            return cost;
+        double cost(e::VectorXd identification, e::VectorXd target){
+            return (identification - target).array().square().sum();
         }
 
         void backpropogate(double cost, double stepsize){
@@ -132,7 +77,8 @@ class Network {
 
 int main(){
 
-    Network net;
+    vector<int> sizes = {784, 183, 43, 10};
+    Network net(sizes);
 
     ifstream map("map.txt");
 
@@ -147,8 +93,7 @@ int main(){
     vector<double> target(outputSize, 0.0);
     vector<double> output;
 
-    Network change;
-    change.fillWeights(0.0);
+    Network change(sizes);
     double z = 0.0;
 
     const int batchSize = 32;
