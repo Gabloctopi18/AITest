@@ -27,10 +27,12 @@ class Network {
     public:
         vector<int> shape;
         int layercount = shape.size();
+        int outputsize = shape[layercount - 1];
         vector<e::VectorXd> l;
         vector<e::VectorXd> b;
         vector<e::MatrixXd> w;
         vector<e::VectorXd> z;
+        e::VectorXd& output = l[layercount - 1];
 
         Network(vector<int> sizes):
             l(layercount), 
@@ -62,8 +64,7 @@ class Network {
                 z[i] = (w[i] * l[i]) + b[i];
                 l[i+1] = 1.0 / (1.0 + (-z[i]).array().exp());
             }
-
-            return l[layercount-2];
+            return output;
         }
 
         double cost(e::VectorXd identification, e::VectorXd target){
@@ -90,8 +91,8 @@ int main(){
     string line;
     double cost;
     string path;
-    vector<double> target(outputSize, 0.0);
-    vector<double> output;
+    e::VectorXd target = e::VectorXd::Zero(net.outputsize);
+    e::VectorXd output;
 
     Network change(sizes);
     double z = 0.0;
@@ -104,24 +105,25 @@ int main(){
         for (int i = 0; i < batchSize; ++i){
             getline(map, line);
             path = line.substr(0, line.find(','));
-            fill(target.begin(), target.end(), 0);
-            target[stoi(line.substr(line.find(',')))] = 1.0;
+            target(stoi(line.substr(line.find(',')))) = 1.0;
 
             output = net.identify(path);
-            cout << "batch " << i << ": " << net.cost(output, target) << endl;
+            cout << "batch " << i << ": " << net.cost(target, output) << endl;
 
             // first change weights & biases from layer3 to output, and store the desired changes to layer 3
-            for (int j = 0; j < size(net.output); ++j){
-                for (int k = 0; k < size(net.l3); ++k){
-                    z += (net.w34[j][k] * net.l3[k]);
-                }
-                z += net.b4[j];
-                for (int k = 0; k < size(change.w34[j]); ++k){
-                    change.w34[j][k] += -1 * rate * net.l3[k] * sigmoidPrime(z) * 2 * (output[j] - target[j]) / batchSize;
-                    change.l3[k] += net.w34[j][k] * sigmoidPrime(z) * 2 * (output[j] - target[j]) / batchSize;
-                }
-                change.b4[j] += -1 * rate * sigmoidPrime(z) * 2 * (output[j] - target[j]) / batchSize;
-                z = 0.0;
+            // for (int j = 0; j < size(net.output); ++j){
+
+            //     for (int k = 0; k < size(change.w34[j]); ++k){
+            //         change.w34[j][k] += -1 * rate * net.l3[k] * sigmoidPrime(z) * 2 * (output[j] - target[j]) / batchSize;
+            //         change.l3[k] += net.w34[j][k] * sigmoidPrime(z) * 2 * (output[j] - target[j]) / batchSize;
+            //     }
+            //     change.b4[j] += -1 * rate * sigmoidPrime(z) * 2 * (output[j] - target[j]) / batchSize;
+            //     z = 0.0;
+            // }
+
+            for (int L = net.layercount - 2; L > -1; --L){
+                change.w[L] = (net.w[L] * net.l[L].asDiagonal()).array().colwise() * (net.z[L].array() * (1 - net.z[L].array()));
+                if 
             }
 
             // same thing with weights & biases from layer 2 to layer 3

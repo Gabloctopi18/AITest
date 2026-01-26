@@ -12,6 +12,7 @@
 // #define outputSize 10
 
 using namespace std;
+namespace e = Eigen;
 
 e::VectorXd imageToVector(const string& imagePath, int size);
 double sigmoid(double x);
