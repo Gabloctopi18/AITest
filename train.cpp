@@ -71,14 +71,27 @@ class Network {
             return (identification - target).array().square().sum();
         }
 
+        void setZero(){
+            output.setZero();
+            for (int i = 0; i < layercount - 1; i++){
+                l[i].setZero();
+                b[i].setZero();
+                w[i].setZero();
+                z[i].setZero();
+            }
+        }
+
         void backpropogate(double cost, double stepsize){
 
         }
 };
 
 int main(){
-
+    const int batchSize = 32;
+    const int numbatches = 1875;
+    const double rate = 0.02;
     vector<int> sizes = {784, 183, 43, 10};
+
     Network net(sizes);
 
     ifstream map("map.txt");
@@ -89,90 +102,42 @@ int main(){
     }
 
     string line;
-    double cost;
     string path;
     e::VectorXd target = e::VectorXd::Zero(net.outputsize);
     e::VectorXd output;
 
     Network change(sizes);
-    double z = 0.0;
+    change.setZero();
 
     const int batchSize = 32;
     const int numbatches = 1875;
     const double rate = 0.02;
 
+    e::VectorXd SigPrimez;
+
     for (int _ = 0; _ < numbatches; ++_){
         for (int i = 0; i < batchSize; ++i){
+            change.setZero();
             getline(map, line);
             path = line.substr(0, line.find(','));
             target(stoi(line.substr(line.find(',')))) = 1.0;
-
             output = net.identify(path);
-            cout << "batch " << i << ": " << net.cost(target, output) << endl;
 
-            // first change weights & biases from layer3 to output, and store the desired changes to layer 3
-            // for (int j = 0; j < size(net.output); ++j){
-
-            //     for (int k = 0; k < size(change.w34[j]); ++k){
-            //         change.w34[j][k] += -1 * rate * net.l3[k] * sigmoidPrime(z) * 2 * (output[j] - target[j]) / batchSize;
-            //         change.l3[k] += net.w34[j][k] * sigmoidPrime(z) * 2 * (output[j] - target[j]) / batchSize;
-            //     }
-            //     change.b4[j] += -1 * rate * sigmoidPrime(z) * 2 * (output[j] - target[j]) / batchSize;
-            //     z = 0.0;
-            // }
-
+            // yes, the math was hell
+            change.output = 2 * (net.output - target);
             for (int L = net.layercount - 2; L > -1; --L){
-                change.w[L] = (net.w[L] * net.l[L].asDiagonal()).array().colwise() * (net.z[L].array() * (1 - net.z[L].array()));
-                if 
-            }
-
-            // same thing with weights & biases from layer 2 to layer 3
-            for (int j = 0; j < size(net.l3); ++j){
-                for (int k = 0; k < size(net.l2); ++k){
-                    z += (net.w23[j][k] * net.l2[k]);
-                }
-                z += net.b3[j];
-                for (int k = 0; k < size(net.l2); ++k){
-                    change.w23[j][k] += -1 * rate * net.l2[k] * sigmoidPrime(z) * change.l3[j] / batchSize;
-                    change.l2[k] += net.w23[j][k] * change.l3[j] / batchSize;
-                }
-                change.b3[j] = -1 * rate * sigmoidPrime(z) * change.l3[j] / batchSize;
-                z = 0.0;
-            }
-
-            // same thing with weights and biases from input to layer 1
-            for (int j = 0; j < size(net.l2); ++j){
-                for (int k = 0; k < size(net.input); ++k){
-                    z += (net.w12[j][k] * net.input[j]);
-                }
-                z += net.b2[j];
-                for (int k = 0; k < size(net.input); ++k){
-                    change.w12[j][k] += -1 * rate * net.input[k] * sigmoidPrime(z) * change.l2[j] / batchSize;
-                }
-                change.b2[j] = -1 * rate * sigmoidPrime(z) * change.l2[j] / batchSize;
+                SigPrimez = (net.z[L].array() * (1 - net.z[L].array())).matrix();
+                change.w[L] += ((net.w[L] * net.l[L].asDiagonal()).array().colwise() * SigPrimez.array() * change.l[L+1].array()).matrix() / batchSize;
+                change.b[L] += (SigPrimez.array() * change.l[L+1].array()).matrix() / batchSize;
+                change.l[L] += net.w[L].transpose() * (SigPrimez.array() * change.l[L+1].array()).matrix() / batchSize;
             }
         }
 
-        // apply the changes
-        for (int j = 0; j < net.output.size(); ++j){
-            for (int k = 0; k < net.l3.size(); ++k){
-                net.w34[j][k] += change.w34[j][k];
-            }
-            net.b4[j] += change.b4[j];
-        }
-        for (int j = 0; j < net.l3.size(); ++j){
-            for (int k = 0; k < net.l2.size(); ++k){
-                net.w23[j][k] += change.w23[j][k];
-            }
-            net.b3[j] += change.b3[j];
-        }
-        for (int j = 0; j < net.l2.size(); ++j){
-            for (int k = 0; k < net.input.size(); ++k){
-                net.w12[j][k] += change.w12[j][k];
-            }
-            net.b2[j] += change.b2[j];
+        for (int L = 0; L < net.layercount-1; ++L){
+            net.w[L] += -1 * rate * change.w[L];
+            net.b[L] += -1 * rate * change.b[L];
         }
     }
-    
+
     return 0;
 }
