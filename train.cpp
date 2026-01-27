@@ -91,17 +91,41 @@ int main(){
     const int numbatches = 1875;
     const double rate = 0.02;
     vector<int> sizes = {784, 183, 43, 10};
+    vector<pair<string, int>> cases;
+    vector<int> correct;
+    vector<pair<string, int>> tests;
+
+    string line;
 
     Network net(sizes);
 
-    ifstream map("map.txt");
+    ifstream casesFile("map.txt");
+    ifstream testsFile("tests.txt");
+    ofstream weights("weights.txt");
 
-    if (!map.is_open()){
+    if (!casesFile.is_open()){
         cerr << "error opening map.txt" << endl;
         return 1;
     }
 
-    string line;
+    if (!testsFile.is_open()){
+        cerr << "error opening tests.txt" << endl;
+        return 1;
+    }
+
+    if (!weights.is_open()){
+        cerr << "error opening weights.txt" << endl;
+        return 1;
+    }
+    // store the tests/cases so we can easily access them later
+    while (getline(casesFile, line)){
+        cases.push_back({line.substr(0, line.find(',')), stoi(line.substr(line.find(',')))});
+    }
+
+    while (getline(testsFile, line)){
+        tests.push_back({line.substr(0, line.find(',')), stoi(line.substr(line.find(',')))});
+    }
+
     string path;
     e::VectorXd target = e::VectorXd::Zero(net.outputsize);
     e::VectorXd output;
@@ -109,34 +133,51 @@ int main(){
     Network change(sizes);
     change.setZero();
 
-    const int batchSize = 32;
-    const int numbatches = 1875;
+    const int maxEpochs = 1000;
+    const int batchSize = 80;
+    const int numbatches = 750;
     const double rate = 0.02;
+    
+    double percent = 0.0;
 
     e::VectorXd SigPrimez;
 
-    for (int _ = 0; _ < numbatches; ++_){
-        for (int i = 0; i < batchSize; ++i){
-            change.setZero();
-            getline(map, line);
-            path = line.substr(0, line.find(','));
-            target(stoi(line.substr(line.find(',')))) = 1.0;
-            output = net.identify(path);
+    for (int e = 0; e < maxEpochs; e++){
+        for (int i = 0; i < numbatches; ++i){
+            for (int j = 0; j < batchSize; ++j){
+                change.setZero();
+                target.setZero();
+                path = cases[batchSize*i + j].first;
+                target(cases[batchSize*i + j].second) = 1.0;
+                net.identify(path); // necessary to update values of layers
 
-            // yes, the math was hell
-            change.output = 2 * (net.output - target);
-            for (int L = net.layercount - 2; L > -1; --L){
-                SigPrimez = (net.z[L].array() * (1 - net.z[L].array())).matrix();
-                change.w[L] += ((net.w[L] * net.l[L].asDiagonal()).array().colwise() * SigPrimez.array() * change.l[L+1].array()).matrix() / batchSize;
-                change.b[L] += (SigPrimez.array() * change.l[L+1].array()).matrix() / batchSize;
-                change.l[L] += net.w[L].transpose() * (SigPrimez.array() * change.l[L+1].array()).matrix() / batchSize;
+                // yes, the math was hell
+                change.output = 2 * (net.output - target);
+                for (int L = net.layercount - 2; L > -1; --L){
+                    SigPrimez = (net.z[L].array() * (1 - net.z[L].array())).matrix();
+                    change.w[L] += ((net.w[L] * net.l[L].asDiagonal()).array().colwise() * SigPrimez.array() * change.l[L+1].array()).matrix() / batchSize;
+                    change.b[L] += (SigPrimez.array() * change.l[L+1].array()).matrix() / batchSize;
+                    change.l[L] += net.w[L].transpose() * (SigPrimez.array() * change.l[L+1].array()).matrix() / batchSize;
+                }
+            }
+
+            for (int L = 0; L < net.layercount-1; ++L){
+                net.w[L] += -1 * rate * change.w[L];
+                net.b[L] += -1 * rate * change.b[L];
             }
         }
-
-        for (int L = 0; L < net.layercount-1; ++L){
-            net.w[L] += -1 * rate * change.w[L];
-            net.b[L] += -1 * rate * change.b[L];
+        for (auto& entry : tests){
+            if (net.identify(entry.first).maxCoeff() == entry.second){ percent += 1; };
         }
+
+        cout << "----- EPOCH " << e << " -----" << endl;
+        cout << "   percent: " << percent/tests.size() << endl << endl;
+        for (int L = 0; L < net.layercount - 2; ++L){
+            weights << "-------- LAYER " << L << " --------" << endl;
+            weights << net.w[L] << endl << endl;
+            weights << net.b[L] << endl << endl;
+        }
+
     }
 
     return 0;
