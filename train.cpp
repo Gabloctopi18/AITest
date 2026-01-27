@@ -26,27 +26,24 @@ class Network {
 
     public:
         vector<int> shape;
-        int layercount = shape.size();
-        int outputsize = shape[layercount - 1];
+        int layercount;
+        int outputsize;
         vector<e::VectorXd> l;
         vector<e::VectorXd> b;
         vector<e::MatrixXd> w;
         vector<e::VectorXd> z;
-        e::VectorXd& output = l[layercount - 1];
 
-        Network(vector<int> sizes):
-            l(layercount), 
-            b(layercount - 1), 
-            w(layercount - 1), 
-            z(layercount - 1)
+        Network(vector<int> sizes)
         {
             shape = sizes;
-            l[0] = e::VectorXd::Constant(shape[0], 0);
+            layercount = sizes.size();
+            outputsize = shape[layercount - 1];
+            l.push_back(e::VectorXd::Constant(shape[0], 0));
             for (int i = 0; i < layercount-1; ++i){
-                w[i] = e::MatrixXd::Random(shape[i], shape[i+1]) * 0.5;
-                b[i] = e::VectorXd::Constant(shape[i+1], 0.1);
-                z[i] = e::VectorXd::Constant(shape[i+1], 0);
-                l[i+1] = e::VectorXd::Constant(shape[i+1], 0);
+                w.push_back(e::MatrixXd::Random(shape[i], shape[i+1]) * 0.5);
+                b.push_back(e::VectorXd::Constant(shape[i+1], 0.1));
+                z.push_back(e::VectorXd::Constant(shape[i+1], 0));
+                l.push_back(e::VectorXd::Constant(shape[i+1], 0));
             }
         }
 
@@ -64,7 +61,7 @@ class Network {
                 z[i] = (w[i] * l[i]) + b[i];
                 l[i+1] = 1.0 / (1.0 + (-z[i]).array().exp());
             }
-            return output;
+            return l.back();
         }
 
         double cost(e::VectorXd identification, e::VectorXd target){
@@ -72,7 +69,7 @@ class Network {
         }
 
         void setZero(){
-            output.setZero();
+            l.back().setZero();
             for (int i = 0; i < layercount - 1; i++){
                 l[i].setZero();
                 b[i].setZero();
@@ -149,7 +146,7 @@ int main(){
                 net.identify(path); // necessary to update values of layers
 
                 // yes, the math was hell
-                change.output = 2 * (net.output - target);
+                change.l.back() = 2 * (net.l.back() - target);
                 for (int L = net.layercount - 2; L > -1; --L){
                     SigPrimez = (net.z[L].array() * (1 - net.z[L].array())).matrix();
                     change.w[L] += ((net.w[L] * net.l[L].asDiagonal()).array().colwise() * SigPrimez.array() * change.l[L+1].array()).matrix() / batchSize;
