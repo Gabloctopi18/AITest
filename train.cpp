@@ -9,10 +9,12 @@
 #include <cstdint>
 #include <random>
 #include <chrono>
+#include <Eigen/Dense>
 
 #include "helpers.h"
 
 using namespace std;
+namespace e = Eigen;
 
 #define inputSize 784 //maybe some geometric progression going on
 #define layer2size 183
@@ -23,106 +25,60 @@ using namespace std;
 class Network {
 
     public:
-        vector<double> input;
-        vector<double> l2;
-        vector<double> l3;
-        vector<double> output;
-        vector<double> b2;
-        vector<double> b3;
-        vector<double> b4;
-        array<array<float, inputSize>, layer2size> w12; // there are (layer2size) rows of (inputSize) weights so you can matrix multiply
-        array<array<float, layer2size>, layer3size> w23; // same for these
-        array<array<float, layer3size>, outputSize> w34;
+        vector<int> shape;
+        int layercount = shape.size();
+        int outputsize = shape[layercount - 1];
+        vector<e::VectorXd> l;
+        vector<e::VectorXd> b;
+        vector<e::MatrixXd> w;
+        vector<e::VectorXd> z;
+        e::VectorXd& output = l[layercount - 1];
 
-        Network():
-            l2(layer2size), 
-            l3(layer3size), 
-            b2(layer2size), 
-            b3(layer3size), 
-            b4(outputSize)
-        {}
+        Network(vector<int> sizes):
+            l(layercount), 
+            b(layercount - 1), 
+            w(layercount - 1), 
+            z(layercount - 1)
+        {
+            shape = sizes;
+            l[0] = e::VectorXd::Constant(shape[0], 0);
+            for (int i = 0; i < layercount-1; ++i){
+                w[i] = e::MatrixXd::Random(shape[i], shape[i+1]) * 0.5;
+                b[i] = e::VectorXd::Constant(shape[i+1], 0.1);
+                z[i] = e::VectorXd::Constant(shape[i+1], 0);
+                l[i+1] = e::VectorXd::Constant(shape[i+1]);
+            }
+        }
 
         void reset(){
-            fill(input.begin(), input.end(), 0);
-            fill(l2.begin(), l2.end(), 0);
-            fill(l3.begin(), l3.end(), 0);
-            fill(output.begin(), output.end(), 0);
-        }
-
-        void randomize(){
-            unsigned seed = chrono::system_clock::now().time_since_epoch().count();
-            mt19937 gen(seed);
-            uniform_int_distribution<int> distrib(-0.5, 0.5);
-
-            for (auto& e1 : w12){
-                for (auto& e2 : e1){
-                    e2 = distrib(gen);
-                }
-            }
-            for (auto& e1 : w23){
-                for (auto& e2 : e1){
-                    e2 = distrib(gen);
-                }
-            }
-            for (auto& e1 : w34){
-                for (auto& e2 : e1){
-                    e2 = distrib(gen);
-                }
+            for (int i = 0; i < layercount; ++i){
+                l[i].setZero();
             }
         }
 
-        void fillWeights(double x){
-            for (auto& e1 : w12){
-                for (auto& e2 : e1){
-                    e2 = x;
-                } 
-            }
-            for (auto& e1 : w23){
-                for (auto& e2 : e1){
-                    e2 = x;
-                } 
-            }
-            for (auto& e1 : w34){
-                for (auto& e2 : e1){
-                    e2 = x;
-                } 
-            }
-        }
-
-        vector<double> identify(const string& imagePath){
+        e::VectorXd identify(const string& imagePath){
             reset();
-            input = imageToVector(imagePath, inputSize);
+            l[0] = imageToVector(imagePath, shape[0]);
 
-            // all of the matrix multiplication
-            for (int i = 0; i < w12.size(); ++i){
-                for (int j = 0; j < input.size(); ++j){
-                    l2[i] += (w12[i][j] * input[j]); 
-                }
-                l2[i] += b2[i];
+            for (int i = 0; i < layercount-1; ++i){
+                z[i] = (w[i] * l[i]) + b[i];
+                l[i+1] = 1.0 / (1.0 + (-z[i]).array().exp());
             }
-            for (int i = 0; i < layer3size; ++i){
-                for (int j = 0; j < layer2size; ++j){
-                    l3[i] += (w23[i][j] * l2[j]); 
-                }
-                l3[i] += b3[i];
-            }
-
-            for (int i = 0; i < outputSize; ++i){
-                for (int j = 0; j < layer3size; ++j){
-                    output[i] += (w34[i][j] * l3[j]); 
-                }
-                output[i] = sigmoid(output[i] + b4[i]);
-            }
-
             return output;
         }
 
-        double cost(vector<double> identification, vector<double> target){
-            double cost = 0;
-            for (int i = 0; i < identification.size(); ++i){
-                cost += pow((identification[i] - target[i]), 2);
+        double cost(e::VectorXd identification, e::VectorXd target){
+            return (identification - target).array().square().sum();
+        }
+
+        void setZero(){
+            output.setZero();
+            for (int i = 0; i < layercount - 1; i++){
+                l[i].setZero();
+                b[i].setZero();
+                w[i].setZero();
+                z[i].setZero();
             }
-            return cost;
         }
 
         void backpropogate(double cost, double stepsize){
@@ -131,8 +87,12 @@ class Network {
 };
 
 int main(){
+    const int batchSize = 32;
+    const int numbatches = 1875;
+    const double rate = 0.02;
+    vector<int> sizes = {784, 183, 43, 10};
 
-    Network net;
+    Network net(sizes);
 
     ifstream map("map.txt");
 
@@ -142,90 +102,42 @@ int main(){
     }
 
     string line;
-    double cost;
     string path;
-    vector<double> target(outputSize, 0.0);
-    vector<double> output;
+    e::VectorXd target = e::VectorXd::Zero(net.outputsize);
+    e::VectorXd output;
 
-    Network change;
-    change.fillWeights(0.0);
-    double z = 0.0;
+    Network change(sizes);
+    change.setZero();
 
     const int batchSize = 32;
     const int numbatches = 1875;
     const double rate = 0.02;
 
+    e::VectorXd SigPrimez;
+
     for (int _ = 0; _ < numbatches; ++_){
         for (int i = 0; i < batchSize; ++i){
+            change.setZero();
             getline(map, line);
             path = line.substr(0, line.find(','));
-            fill(target.begin(), target.end(), 0);
-            target[stoi(line.substr(line.find(',')))] = 1.0;
-
+            target(stoi(line.substr(line.find(',')))) = 1.0;
             output = net.identify(path);
-            cout << "batch " << i << ": " << net.cost(output, target) << endl;
 
-            // first change weights & biases from layer3 to output, and store the desired changes to layer 3
-            for (int j = 0; j < size(net.output); ++j){
-                for (int k = 0; k < size(net.l3); ++k){
-                    z += (net.w34[j][k] * net.l3[k]);
-                }
-                z += net.b4[j];
-                for (int k = 0; k < size(change.w34[j]); ++k){
-                    change.w34[j][k] += -1 * rate * net.l3[k] * sigmoidPrime(z) * 2 * (output[j] - target[j]) / batchSize;
-                    change.l3[k] += net.w34[j][k] * sigmoidPrime(z) * 2 * (output[j] - target[j]) / batchSize;
-                }
-                change.b4[j] += -1 * rate * sigmoidPrime(z) * 2 * (output[j] - target[j]) / batchSize;
-                z = 0.0;
-            }
-
-            // same thing with weights & biases from layer 2 to layer 3
-            for (int j = 0; j < size(net.l3); ++j){
-                for (int k = 0; k < size(net.l2); ++k){
-                    z += (net.w23[j][k] * net.l2[k]);
-                }
-                z += net.b3[j];
-                for (int k = 0; k < size(net.l2); ++k){
-                    change.w23[j][k] += -1 * rate * net.l2[k] * sigmoidPrime(z) * change.l3[j] / batchSize;
-                    change.l2[k] += net.w23[j][k] * change.l3[j] / batchSize;
-                }
-                change.b3[j] = -1 * rate * sigmoidPrime(z) * change.l3[j] / batchSize;
-                z = 0.0;
-            }
-
-            // same thing with weights and biases from input to layer 1
-            for (int j = 0; j < size(net.l2); ++j){
-                for (int k = 0; k < size(net.input); ++k){
-                    z += (net.w12[j][k] * net.input[j]);
-                }
-                z += net.b2[j];
-                for (int k = 0; k < size(net.input); ++k){
-                    change.w12[j][k] += -1 * rate * net.input[k] * sigmoidPrime(z) * change.l2[j] / batchSize;
-                }
-                change.b2[j] = -1 * rate * sigmoidPrime(z) * change.l2[j] / batchSize;
+            // yes, the math was hell
+            change.output = 2 * (net.output - target);
+            for (int L = net.layercount - 2; L > -1; --L){
+                SigPrimez = (net.z[L].array() * (1 - net.z[L].array())).matrix();
+                change.w[L] += ((net.w[L] * net.l[L].asDiagonal()).array().colwise() * SigPrimez.array() * change.l[L+1].array()).matrix() / batchSize;
+                change.b[L] += (SigPrimez.array() * change.l[L+1].array()).matrix() / batchSize;
+                change.l[L] += net.w[L].transpose() * (SigPrimez.array() * change.l[L+1].array()).matrix() / batchSize;
             }
         }
 
-        // apply the changes
-        for (int j = 0; j < net.output.size(); ++j){
-            for (int k = 0; k < net.l3.size(); ++k){
-                net.w34[j][k] += change.w34[j][k];
-            }
-            net.b4[j] += change.b4[j];
-        }
-        for (int j = 0; j < net.l3.size(); ++j){
-            for (int k = 0; k < net.l2.size(); ++k){
-                net.w23[j][k] += change.w23[j][k];
-            }
-            net.b3[j] += change.b3[j];
-        }
-        for (int j = 0; j < net.l2.size(); ++j){
-            for (int k = 0; k < net.input.size(); ++k){
-                net.w12[j][k] += change.w12[j][k];
-            }
-            net.b2[j] += change.b2[j];
+        for (int L = 0; L < net.layercount-1; ++L){
+            net.w[L] += -1 * rate * change.w[L];
+            net.b[L] += -1 * rate * change.b[L];
         }
     }
-    
+
     return 0;
 }

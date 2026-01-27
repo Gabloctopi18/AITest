@@ -4,15 +4,17 @@
 #include <vector>
 #include <array>
 #include <string>
+#include <Eigen/Dense>
 
-#define inputSize 784 //maybe some geometric progression going on
-#define layer2size 183
-#define layer3size 43
-#define outputSize 10
+// #define inputSize 784 //maybe some geometric progression going on
+// #define layer2size 183
+// #define layer3size 43
+// #define outputSize 10
 
 using namespace std;
+namespace e = Eigen;
 
-vector<double> imageToVector(const string& imagePath, int size);
+e::VectorXd imageToVector(const string& imagePath, int size);
 double sigmoid(double x);
 double sigmoidPrime(double x);
 
