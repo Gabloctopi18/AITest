@@ -18,4 +18,4 @@ e::VectorXd imageToVector(const string& imagePath, int size);
 double sigmoid(double x);
 double sigmoidPrime(double x);
 
-#endif HELPERS_H
+#endif
