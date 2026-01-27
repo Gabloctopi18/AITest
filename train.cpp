@@ -46,7 +46,7 @@ class Network {
                 w[i] = e::MatrixXd::Random(shape[i], shape[i+1]) * 0.5;
                 b[i] = e::VectorXd::Constant(shape[i+1], 0.1);
                 z[i] = e::VectorXd::Constant(shape[i+1], 0);
-                l[i+1] = e::VectorXd::Constant(shape[i+1]);
+                l[i+1] = e::VectorXd::Constant(shape[i+1], 0);
             }
         }
 
@@ -87,9 +87,11 @@ class Network {
 };
 
 int main(){
-    const int batchSize = 32;
-    const int numbatches = 1875;
+    const int maxEpochs = 1000;
+    const int batchSize = 80;
+    const int numbatches = 750;
     const double rate = 0.02;
+
     vector<int> sizes = {784, 183, 43, 10};
     vector<pair<string, int>> cases;
     vector<int> correct;
@@ -132,11 +134,6 @@ int main(){
 
     Network change(sizes);
     change.setZero();
-
-    const int maxEpochs = 1000;
-    const int batchSize = 80;
-    const int numbatches = 750;
-    const double rate = 0.02;
     
     double percent = 0.0;
 
