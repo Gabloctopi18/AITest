@@ -91,7 +91,6 @@ int main(){
 
     vector<int> sizes = {784, 183, 43, 10};
     vector<pair<string, int>> cases;
-    vector<int> correct;
     vector<pair<string, int>> tests;
 
     string line;
@@ -118,16 +117,15 @@ int main(){
     }
     // store the tests/cases so we can easily access them later
     while (getline(casesFile, line)){
-        cases.push_back({line.substr(0, line.find(',')), stoi(line.substr(line.find(',')))});
+        cases.push_back({line.substr(0, line.find(',')), stoi(line.substr(line.find(',')+1))});
     }
 
     while (getline(testsFile, line)){
-        tests.push_back({line.substr(0, line.find(',')), stoi(line.substr(line.find(',')))});
+        tests.push_back({line.substr(0, line.find(',')), stoi(line.substr(line.find(',')+1))});
     }
 
     string path;
     e::VectorXd target = e::VectorXd::Zero(net.outputsize);
-    e::VectorXd output;
 
     Network change(sizes);
     change.setZero();
@@ -135,6 +133,7 @@ int main(){
     double percent = 0.0;
 
     e::VectorXd SigPrimez;
+    e::Index maxVal;
 
     for (int e = 0; e < maxEpochs; e++){
         for (int i = 0; i < numbatches; ++i){
@@ -161,17 +160,19 @@ int main(){
             }
         }
         for (auto& entry : tests){
-            if (net.identify(entry.first).maxCoeff() == entry.second){ percent += 1; };
+            net.identify(entry.first).maxCoeff(&maxVal);
+            if (maxVal == entry.second){ percent += 1; };
         }
 
-        cout << "----- EPOCH " << e << " -----" << endl;
-        cout << "   percent: " << percent/tests.size() << endl << endl;
-        for (int L = 0; L < net.layercount - 2; ++L){
+        std::cout << "----- EPOCH " << e << " -----" << endl;
+        std::cout << "   percent: " << percent/tests.size() << endl << endl;
+        for (int L = 0; L < net.layercount - 1; ++L){
             weights << "-------- LAYER " << L << " --------" << endl;
             weights << net.w[L] << endl << endl;
             weights << net.b[L] << endl << endl;
         }
 
+        percent = 0;
     }
 
     return 0;
