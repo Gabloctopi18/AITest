@@ -14,7 +14,7 @@
 using namespace std;
 namespace e = Eigen;
 
-e::VectorXd imageToVector(const string& imagePath, int size);
+// e::VectorXd imageToVector(const string& imagePath, int size);
 double sigmoid(double x);
 double sigmoidPrime(double x);
 

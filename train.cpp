@@ -6,6 +6,7 @@
 #include <string>
 #include <unistd.h>
 #include <fstream>
+#include <sstream>
 #include <cstdint>
 #include <random>
 #include <chrono>
@@ -53,9 +54,9 @@ class Network {
             }
         }
 
-        e::VectorXd identify(const string& imagePath){
+        e::VectorXd identify(e::VectorXd pixels){
             reset();
-            l[0] = imageToVector(imagePath, shape[0]);
+            l[0] = pixels;
 
             for (int i = 0; i < layercount-1; ++i){
                 z[i] = (w[i] * l[i]) + b[i];
@@ -85,29 +86,32 @@ class Network {
 
 int main(){
     const int maxEpochs = 1000;
-    const int batchSize = 80;
-    const int numbatches = 750;
+    const int batchSize = 160;
+    const int numbatches = 375;
     const double rate = 0.02;
 
     vector<int> sizes = {784, 183, 43, 10};
-    vector<pair<string, int>> cases;
-    vector<pair<string, int>> tests;
+    vector<pair<e::VectorXd, int>> cases;
+    vector<pair<e::VectorXd, int>> tests;
+    e::VectorXd row(sizes[0]);
+    double label;
+    string cell;
 
     string line;
 
     Network net(sizes);
 
-    ifstream casesFile("map.txt");
-    ifstream testsFile("tests.txt");
+    ifstream casesFile("./archive/mnist_train.csv");
+    ifstream testsFile("./archive/mnist_test.csv");
     ofstream weights("weights.txt");
 
     if (!casesFile.is_open()){
-        cerr << "error opening map.txt" << endl;
+        cerr << "error opening mnist_train.csv" << endl;
         return 1;
     }
 
     if (!testsFile.is_open()){
-        cerr << "error opening tests.txt" << endl;
+        cerr << "error opening mnist_test.csv" << endl;
         return 1;
     }
 
@@ -116,12 +120,36 @@ int main(){
         return 1;
     }
     // store the tests/cases so we can easily access them later
+    getline(casesFile, line);
     while (getline(casesFile, line)){
-        cases.push_back({line.substr(0, line.find(',')), stoi(line.substr(line.find(',')+1))});
+        int i = 0;
+        stringstream ss(line);
+
+        getline(ss, cell, ',');
+        label = stod(cell);
+
+        while (getline(ss, cell, ',')){
+            row[i] = stod(cell);
+            ++i;
+        }
+
+        cases.push_back({row, label});
     }
 
+    getline(testsFile, line);
     while (getline(testsFile, line)){
-        tests.push_back({line.substr(0, line.find(',')), stoi(line.substr(line.find(',')+1))});
+        int i = 0;
+        stringstream ss(line);
+
+        getline(ss, cell, ',');
+        label = stod(cell);
+
+        while (getline(ss, cell, ',')){
+            row[i] = stod(cell);
+            ++i;
+        }
+
+        cases.push_back({row, label});
     }
 
     string path;
@@ -135,28 +163,27 @@ int main(){
     e::VectorXd SigPrimez;
     e::Index maxVal;
 
+    e::VectorXd temp1;
+    e::VectorXd temp2;
+    e::MatrixXd temp;
+
     for (int e = 0; e < maxEpochs; e++){
         for (int i = 0; i < numbatches; ++i){
             for (int j = 0; j < batchSize; ++j){
-                change.setZero();
                 target.setZero();
-                path = cases[batchSize*i + j].first;
                 target(cases[batchSize*i + j].second) = 1.0;
-                net.identify(path); // necessary to update values of layers
+                net.identify(cases[batchSize*i + j].first); // necessary to update values of layers
 
                 // yes, the math was hell
                 change.l.back() = 2 * (net.l.back() - target);
                 for (int L = net.layercount - 2; L > -1; --L){
-                    SigPrimez = (net.z[L].array() * (1 - net.z[L].array())).matrix();
-                    change.w[L] += ((net.w[L] * net.l[L].asDiagonal()).array().colwise() * SigPrimez.array() * change.l[L+1].array()).matrix() / batchSize;
-                    change.b[L] += (SigPrimez.array() * change.l[L+1].array()).matrix() / batchSize;
-                    change.l[L] += net.w[L].transpose() * (SigPrimez.array() * change.l[L+1].array()).matrix() / batchSize;
+                    SigPrimez = (net.l[L+1].array() * (1 - net.l[L+1].array())).matrix();
+                    change.w[L] = ((net.w[L] * net.l[L].asDiagonal()).array().colwise() * SigPrimez.array() * change.l[L+1].array()).matrix() / batchSize;
+                    change.b[L] = (SigPrimez.array() * change.l[L+1].array()).matrix() / batchSize;
+                    change.l[L] = net.w[L].transpose() * (SigPrimez.array() * change.l[L+1].array()).matrix() / batchSize;
+                    net.w[L] += -1 * rate * change.w[L];
+                    net.b[L] += -1 * rate * change.b[L];
                 }
-            }
-
-            for (int L = 0; L < net.layercount-1; ++L){
-                net.w[L] += -1 * rate * change.w[L];
-                net.b[L] += -1 * rate * change.b[L];
             }
         }
         for (auto& entry : tests){

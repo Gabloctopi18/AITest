@@ -1,4 +1,4 @@
 {
     "editor.inlineSuggest.edits.renderSideBySide": "auto",
-    "chat.disableAIFeatures": false
+    "chat.disableAIFeatures": true
 }
