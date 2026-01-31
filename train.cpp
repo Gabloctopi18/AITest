@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <random>
 #include <chrono>
+#include <filesystem>
 #include <Eigen/Dense>
 
 #include "helpers.h"
@@ -41,7 +42,7 @@ class Network {
             outputsize = shape[layercount - 1];
             l.push_back(e::VectorXd::Constant(shape[0], 0));
             for (int i = 0; i < layercount-1; ++i){
-                w.push_back(e::MatrixXd::Random(shape[i], shape[i+1]) * 0.5);
+                w.push_back(e::MatrixXd::Random(shape[i+1], shape[i]) * 0.5);
                 b.push_back(e::VectorXd::Constant(shape[i+1], 0.1));
                 z.push_back(e::VectorXd::Constant(shape[i+1], 0));
                 l.push_back(e::VectorXd::Constant(shape[i+1], 0));
@@ -88,7 +89,7 @@ int main(){
     const int maxEpochs = 1000;
     const int batchSize = 160;
     const int numbatches = 375;
-    const double rate = 0.02;
+    const double rate = 2.0;
 
     vector<int> sizes = {784, 183, 43, 10};
     vector<pair<e::VectorXd, int>> cases;
@@ -129,7 +130,7 @@ int main(){
         label = stod(cell);
 
         while (getline(ss, cell, ',')){
-            row[i] = stod(cell);
+            row[i] = stod(cell) / 255.0;
             ++i;
         }
 
@@ -145,11 +146,11 @@ int main(){
         label = stod(cell);
 
         while (getline(ss, cell, ',')){
-            row[i] = stod(cell);
+            row[i] = stod(cell) / 255.0;
             ++i;
         }
 
-        cases.push_back({row, label});
+        tests.push_back({row, label});
     }
 
     string path;
@@ -163,12 +164,9 @@ int main(){
     e::VectorXd SigPrimez;
     e::Index maxVal;
 
-    e::VectorXd temp1;
-    e::VectorXd temp2;
-    e::MatrixXd temp;
-
     for (int e = 0; e < maxEpochs; e++){
         for (int i = 0; i < numbatches; ++i){
+            change.setZero();
             for (int j = 0; j < batchSize; ++j){
                 target.setZero();
                 target(cases[batchSize*i + j].second) = 1.0;
@@ -178,25 +176,35 @@ int main(){
                 change.l.back() = 2 * (net.l.back() - target);
                 for (int L = net.layercount - 2; L > -1; --L){
                     SigPrimez = (net.l[L+1].array() * (1 - net.l[L+1].array())).matrix();
-                    change.w[L] = ((net.w[L] * net.l[L].asDiagonal()).array().colwise() * SigPrimez.array() * change.l[L+1].array()).matrix() / batchSize;
-                    change.b[L] = (SigPrimez.array() * change.l[L+1].array()).matrix() / batchSize;
-                    change.l[L] = net.w[L].transpose() * (SigPrimez.array() * change.l[L+1].array()).matrix() / batchSize;
-                    net.w[L] += -1 * rate * change.w[L];
-                    net.b[L] += -1 * rate * change.b[L];
+                    change.w[L] += (change.l[L+1].array() * SigPrimez.array()).matrix() * net.l[L].transpose();
+                    change.b[L] += (SigPrimez.array() * change.l[L+1].array()).matrix();
+                    change.l[L] = net.w[L].transpose() * (SigPrimez.array() * change.l[L+1].array()).matrix();
                 }
             }
+
+            for (int L = 0; L < net.layercount - 1; L++){
+                net.w[L] += -1 * rate * change.w[L] / batchSize;
+                net.b[L] += -1 * rate * change.b[L] / batchSize;
+            }
+
+            if ((i + 1) % 50 == 0) cout << "  Batch " << (i + 1) << " / " << numbatches << "\r";
         }
         for (auto& entry : tests){
             net.identify(entry.first).maxCoeff(&maxVal);
             if (maxVal == entry.second){ percent += 1; };
         }
 
-        std::cout << "----- EPOCH " << e << " -----" << endl;
-        std::cout << "   percent: " << percent/tests.size() << endl << endl;
-        for (int L = 0; L < net.layercount - 1; ++L){
-            weights << "-------- LAYER " << L << " --------" << endl;
-            weights << net.w[L] << endl << endl;
-            weights << net.b[L] << endl << endl;
+        std::cout << "\n----- EPOCH " << e << " -----" << endl;
+        std::cout << "   correct: " << percent << endl;
+        cout << "   percent: " << (percent / tests.size()) * 100 << "%" << endl;
+        
+        if ((e + 1) % 2 == 0) {
+            for (int L = 0; L < net.layercount - 1; ++L){
+                filesystem::resize_file("weights.txt", 0);
+                weights << "-------- LAYER " << L << " EPOCH " << e << " --------" << endl;
+                weights << net.w[L] << endl << endl;
+                weights << net.b[L] << endl << endl;
+            }
         }
 
         percent = 0;
