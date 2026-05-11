@@ -83,10 +83,11 @@ class Network {
 };
 
 int main(){
-    const int maxEpochs = 1000;
+    const int maxEpochs = 100;
     const int batchSize = 480;
     const int numbatches = 125;
-    const double rate = 2;
+    const static e::IOFormat CSVFormat(e::StreamPrecision, e::DontAlignCols, ", ", "\n");
+    double rate = 2.5;
 
     vector<int> sizes = {784, 183, 43, 10};
     vector<pair<e::VectorXd, int>> cases;
@@ -101,7 +102,6 @@ int main(){
 
     ifstream casesFile("./archive/mnist_train.csv");
     ifstream testsFile("./archive/mnist_test.csv");
-    ofstream weights("weights.txt");
 
     if (!casesFile.is_open()){
         cerr << "error opening mnist_train.csv" << endl;
@@ -113,10 +113,6 @@ int main(){
         return 1;
     }
 
-    if (!weights.is_open()){
-        cerr << "error opening weights.txt" << endl;
-        return 1;
-    }
     // store the tests/cases so we can easily access them later
     getline(casesFile, line);
     while (getline(casesFile, line)){
@@ -202,14 +198,28 @@ int main(){
         std::cout << "   correct: " << percent << endl;
         cout << "   percent: " << (percent / tests.size()) * 100 << "%" << endl;
         
-        // if ((e + 1) % 2 == 0) {
-        //     for (int L = 0; L < net.layercount - 1; ++L){
-        //         filesystem::resize_file("weights.txt", 0);
-        //         weights << "-------- LAYER " << L << " EPOCH " << e << " --------" << endl;
-        //         weights << net.w[L] << endl << endl;
-        //         weights << net.b[L] << endl << endl;
-        //     }
-        // }
+        if ((e + 1) % 2 == 0) {
+            for (int L = 0; L < net.layercount - 1; ++L){
+                ofstream weights("weights/weights" + to_string(L) + ".csv", ios::trunc);
+                ofstream biases("weights/biases" + to_string(L) + ".csv", ios::trunc);
+                if (!weights.is_open()){
+                    cerr << "error opening weights" + to_string(L) + ".csv" << endl;
+                    return 1;
+                }
+                if (!biases.is_open()){
+                    cerr << "error opening biases" + to_string(L) + ".csv" << endl;
+                    return 1;
+                }
+                weights << std::fixed;
+                weights.precision(7);
+                biases << std::fixed;
+                biases.precision(7);
+                weights << net.w[L].format(CSVFormat);
+                biases << net.b[L].format(CSVFormat);
+                weights.close();
+                biases.close();
+            }
+        }
 
         percent = 0;
     }
