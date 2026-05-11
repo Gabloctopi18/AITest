@@ -80,10 +80,44 @@ class Network {
                 z[i].setZero();
             }
         }
+
+        void readFromFile(){
+            const static e::IOFormat CSVFormat(e::StreamPrecision, e::DontAlignCols, ", ", "\n");
+            for (int L = 0; L < layercount - 1; ++L){
+                ifstream weights("weights/weights" + to_string(L) + ".csv");
+                ifstream biases("weights/biases" + to_string(L) + ".csv");
+                if (!weights.is_open()){
+                    cerr << "error opening weights" + to_string(L) + ".csv" << endl;
+                    return;
+                }
+                if (!biases.is_open()){
+                    cerr << "error opening biases" + to_string(L) + ".csv" << endl;
+                    return;
+                }
+                string line;
+                int i = 0;
+                while (getline(weights, line)){
+                    stringstream ss(line);
+                    string cell;
+                    int j = 0;
+                    while (getline(ss, cell, ',')){
+                        w[L](i, j) = stod(cell);
+                        ++j;
+                    }
+                    ++i;
+                }
+                i = 0;
+                while (getline(biases, line)){
+                    b[L](i) = stod(line);
+                    ++i;
+                }
+                weights.close();
+                biases.close();
+            }
+        }
 };
 
-int main(){
-    const int maxEpochs = 100;
+Network train(int maxEpochs){
     const int batchSize = 480;
     const int numbatches = 125;
     const static e::IOFormat CSVFormat(e::StreamPrecision, e::DontAlignCols, ", ", "\n");
@@ -105,12 +139,12 @@ int main(){
 
     if (!casesFile.is_open()){
         cerr << "error opening mnist_train.csv" << endl;
-        return 1;
+        return net;
     }
 
     if (!testsFile.is_open()){
         cerr << "error opening mnist_test.csv" << endl;
-        return 1;
+        return net;
     }
 
     // store the tests/cases so we can easily access them later
@@ -204,11 +238,11 @@ int main(){
                 ofstream biases("weights/biases" + to_string(L) + ".csv", ios::trunc);
                 if (!weights.is_open()){
                     cerr << "error opening weights" + to_string(L) + ".csv" << endl;
-                    return 1;
+                    return net;
                 }
                 if (!biases.is_open()){
                     cerr << "error opening biases" + to_string(L) + ".csv" << endl;
-                    return 1;
+                    return net;
                 }
                 weights << std::fixed;
                 weights.precision(7);
@@ -224,5 +258,44 @@ int main(){
         percent = 0;
     }
 
-    return 0;
+    return net;
+}
+
+int main(){
+    // Network net = train(20);
+    Network net({784, 183, 43, 10});
+    net.readFromFile();
+    // load tests file
+    string line;
+    vector<pair<e::VectorXd, int>> tests;
+    string cell;
+    double label;
+    e::VectorXd row(net.shape[0]);
+    ifstream testsFile("./archive/mnist_test.csv");
+    getline(testsFile, line);
+    while (getline(testsFile, line)){
+        int i = 0;
+        stringstream ss(line);
+
+        getline(ss, cell, ',');
+        label = stod(cell);
+
+        while (getline(ss, cell, ',')){
+            row[i] = stod(cell) / 255.0;
+            ++i;
+        }
+
+        tests.push_back({row, label});
+    }
+    e::Index maxVal;
+    
+    int wrong = 0;
+    for (auto& entry : tests){
+        net.identify(entry.first).maxCoeff(&maxVal);
+        if (entry.second != maxVal){
+            cout << "actual: " << entry.second << "   identified: " << maxVal << endl;
+            ++wrong;
+        }
+    }
+    cout << "wrong: " << wrong << " / " << tests.size() << endl;
 }
